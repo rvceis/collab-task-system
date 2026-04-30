@@ -1,9 +1,9 @@
 import { createTask,
-    getAllTasks,
     getTaskById,
     getTasksByProjectId,
-    updateTask,deleteTask } from "../services/taskServices";
-import { handleError, AppError, validateInput, checkAuthorization, notFound } from "../utils/errorHandler.js";
+    updateTask,deleteTask } from "../services/taskServices.js";
+import { handleError, AppError, validateInput } from "../utils/errorHandler.js";
+import { ensureProjectAccess } from "../utils/projectAccess.js";
 
 /* =========================
    CREATE TASK
@@ -14,6 +14,7 @@ export const createTaskController = async (req, res) => {
   console.log("📥 [CREATE TASK]", req.body)     
   try {
     validateInput(["title", "description", "projectId"], req.body)      
+    await ensureProjectAccess(projectId, req.user?.id);
     const task = await createTask(title, description, projectId, assignedTo)
     console.log("✅ Task created:", task)
     res.status(201).json({
@@ -34,6 +35,10 @@ export const getTasksByProjectController = async (req, res) => {
 
   console.log("📥 [GET TASKS BY PROJECT]", { projectId }  )
     try {           
+    if (!projectId) {
+      throw new AppError("projectId is required", 400);
+    }
+    await ensureProjectAccess(projectId, req.user?.id);
     const tasks = await getTasksByProjectId(projectId)
     console.log(`✅ Found ${tasks.length} tasks for project ${projectId}`)
     res.json({
@@ -51,7 +56,7 @@ export const getTasksByProjectController = async (req, res) => {
    GET TASK BY ID
 ========================= */
 export const getTaskByIdController = async (req, res) => {
-  const { taskId } = req.params;
+  const { id: taskId } = req.params;
 
   console.log("📥 [GET TASK BY ID]", { taskId }     )
     try {           
@@ -59,6 +64,7 @@ export const getTaskByIdController = async (req, res) => {
     if (!task) {
       throw new AppError("Task not found", 404);
     }
+    await ensureProjectAccess(task.project_id, req.user?.id);
     console.log("✅ Task fetched:", task)
     res.json({
       success: true,
@@ -74,11 +80,19 @@ export const getTaskByIdController = async (req, res) => {
    UPDATE TASK
 ========================= */
 export const updateTaskController = async (req, res) => {
-  const { taskId } = req.params;
+  const { id: taskId } = req.params;
   const { title, description, assignedTo } = req.body;
 
   console.log("📥 [UPDATE TASK]", { taskId, ...req.body }   )
     try {           
+    if (!taskId) {
+      throw new AppError("Task id is required", 400);
+    }
+    const task = await getTaskById(taskId);
+    if (!task) {
+      throw new AppError("Task not found", 404);
+    }
+    await ensureProjectAccess(task.project_id, req.user?.id);
     const updatedTask = await updateTask(taskId, title, description, assignedTo)  
     console.log("✅ Task updated:", updatedTask)
     res.json({
@@ -95,10 +109,18 @@ export const updateTaskController = async (req, res) => {
    DELETE TASK
 ========================= */
 export const deleteTaskController = async (req, res) => {
-  const { taskId } = req.params;
+  const { id: taskId } = req.params;
 
   console.log("📥 [DELETE TASK]", { taskId }            )
     try {           
+    if (!taskId) {
+      throw new AppError("Task id is required", 400);
+    }
+    const task = await getTaskById(taskId);
+    if (!task) {
+      throw new AppError("Task not found", 404);
+    }
+    await ensureProjectAccess(task.project_id, req.user?.id);
     await deleteTask(taskId)  
     console.log("✅ Task deleted:", taskId)
     res.json({
@@ -107,31 +129,5 @@ export const deleteTaskController = async (req, res) => {
     });
   } catch (error) {
     handleError(error, res, "DELETE_TASK");
-  }
-};
-
-/* =========================
-   GET PROJECT BY ID
-========================= */
-export const getProjectByIdController = async (req, res) => {
-  const { id } = req.params;
-
-  console.log("📥 [GET PROJECT BY ID] ID:", id)     
-  try {     
-    const userId = req.user?.id     
-    const project = await getProjectById(id)
-    if (!project) {
-      notFound("Project", id)
-    }
-    checkAuthorization(userId, project.created_by, "project")
-    console.log("✅ Project fetched:", project)
-    res.json({
-      success: true,
-      message: "Project retrieved successfully",
-      project,
-    });     
-  }
-  catch (error) {
-    handleError(error, res, "GET_PROJECT_BY_ID");
   }
 };

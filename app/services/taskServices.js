@@ -1,5 +1,5 @@
-import pool from "../../config/db";
-import { AppError } from "../utils/errorHandler";
+import pool from "../../config/db.js";
+import { AppError } from "../utils/errorHandler.js";
 // CREATE TASK
 export const createTask = async (title, description, projectId, assignedTo) => {
   console.log("📥 [DB] createTask:", { title, description, projectId, assignedTo })   

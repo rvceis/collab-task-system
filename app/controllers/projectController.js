@@ -3,9 +3,9 @@ import {
   deleteProject,
   updateProject,
   getProjectsByUserId,
-  getProjectById,
 } from "../services/ProjectServices.js";
-import { handleError, AppError, validateInput, checkAuthorization, notFound } from "../utils/errorHandler.js";
+import { handleError, AppError, validateInput } from "../utils/errorHandler.js";
+import { ensureProjectAccess, ensureProjectOwnerAccess } from "../utils/projectAccess.js";
 
 /* =========================
    CREATE PROJECT
@@ -77,13 +77,7 @@ export const getProjectController = async (req, res) => {
   try {
     const userId = req.user?.id;
 
-    const project = await getProjectById(id);
-
-    if (!project) {
-      notFound("Project", id);
-    }
-
-    checkAuthorization(userId, project.created_by, "project");
+    const project = await ensureProjectAccess(id, userId);
 
     console.log("✅ Project fetched:", project);
 
@@ -111,13 +105,7 @@ export const updateProjectController = async (req, res) => {
 
     const userId = req.user?.id;
 
-    const project = await getProjectById(id);
-
-    if (!project) {
-      notFound("Project", id);
-    }
-
-    checkAuthorization(userId, project.created_by, "project");
+    await ensureProjectAccess(id, userId);
 
     const updatedProject = await updateProject(id, name, description);
 
@@ -144,14 +132,8 @@ export const deleteProjectController = async (req, res) => {
   try {
     const userId = req.user?.id;
 
-    const project = await getProjectById(id);
-
-    if (!project) {
-      notFound("Project", id);
-    }
-
-    checkAuthorization(userId, project.created_by, "project");
-
+    await ensureProjectOwnerAccess(id, userId);
+    
     await deleteProject(id);
 
     console.log("🗑️ Project deleted:", id);
