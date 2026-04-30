@@ -1,16 +1,25 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import pool from "../../config/db.js";
 import { findUserByEmail, createUser } from "../services/userServices.js";
+import { handleError, AppError, validateInput } from "../utils/errorHandler.js";
 
 
 export const register = async (req, res) => {
   const { name, email, password } = req.body;
 
   try {
+    // Validate input
+    validateInput(["name", "email", "password"], req.body);
+
+    if (password.length < 6) {
+      throw new AppError("Password must be at least 6 characters", 400);
+    }
+
     // Check if user already exists
     const existingUser = await findUserByEmail(email);
     if (existingUser) {
-      return res.status(400).json({ message: "User already exists" });
+      throw new AppError("Email already registered", 409, { email });
     }
 
     // Hash the password
@@ -21,13 +30,21 @@ export const register = async (req, res) => {
     const newUser = await createUser(name, email, hashedPassword);
 
     // Generate JWT token
+    if (!process.env.JWT_SECRET) {
+      throw new AppError("Server configuration error", 500, { error: "JWT_SECRET not set" });
+    }
     const token = jwt.sign({ id: newUser.id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
 
-    res.status(201).json({ token });
+    res.status(201).json({
+      success: true,
+      message: "User registered successfully",
+      token,
+      user: { id: newUser.id, name: newUser.name, email: newUser.email },
+    });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    handleError(error, res, "REGISTER");
   }
 };
 
@@ -35,38 +52,65 @@ export const login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    validateInput(["email", "password"], req.body);
+
     // Find user by email
     const user = await findUserByEmail(email);
     if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      throw new AppError("Invalid credentials", 401);
     }
 
     // Check password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      throw new AppError("Invalid credentials", 401);
     }
 
     // Generate JWT token
+    if (!process.env.JWT_SECRET) {
+      throw new AppError("Server configuration error", 500, { error: "JWT_SECRET not set" });
+    }
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
 
-    res.json({ token });
+    res.json({
+      success: true,
+      message: "Login successful",
+      token,
+      user: { id: user.id, name: user.name, email: user.email },
+    });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    handleError(error, res, "LOGIN");
   }
 };
 
 export const getMe = async (req, res) => {
   try {
-    const user = await findUserByEmail(req.user.email);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new AppError("Unauthorized", 401);
     }
 
-    res.json({ id: user.id, name: user.name, email: user.email });
+    console.log("📥 [GET ME] User ID:", userId);
+
+    // Find user by ID (more efficient than by email)
+    const result = await pool.query(
+      "SELECT id, name, email FROM users WHERE id = $1",
+      [userId]
+    );
+    const user = result.rows[0];
+
+    if (!user) {
+      throw new AppError("User not found", 404);
+    }
+
+    res.json({
+      success: true,
+      message: "User retrieved successfully",
+      user: { id: user.id, name: user.name, email: user.email },
+    });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    handleError(error, res, "GET_ME");
   }
 };      
