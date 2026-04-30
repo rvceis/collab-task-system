@@ -6,14 +6,13 @@ import {
 } from "../services/ProjectServices.js";
 import { handleError, AppError, validateInput } from "../utils/errorHandler.js";
 import { ensureProjectAccess, ensureProjectOwnerAccess } from "../utils/projectAccess.js";
+import { logActivity } from "../services/activityService.js";
 
 /* =========================
    CREATE PROJECT
 ========================= */
 export const createProjectController = async (req, res) => {
   const { name, description } = req.body;
-
-  console.log("📥 [CREATE PROJECT]", req.body);
 
   try {
     validateInput(["name", "description"], req.body);
@@ -25,9 +24,13 @@ export const createProjectController = async (req, res) => {
     }
 
     const project = await createProject(name, description, userId);
-
-    console.log("✅ Project created:", project);
-
+    await logActivity(
+      userId,
+      project.id,
+      "CREATE_PROJECT",
+      `Created project: ${project.name}`
+    );
+    io.emit("projectCreated", { projectId: project.id }) // Emit real-time event
     res.status(201).json({
       success: true,
       message: "Project created successfully",
@@ -42,8 +45,6 @@ export const createProjectController = async (req, res) => {
    GET ALL PROJECTS (USER)
 ========================= */
 export const getProjectsController = async (req, res) => {
-  console.log("📥 [GET PROJECTS] User:", req.user);
-
   try {
     const userId = req.user?.id;
 
@@ -53,7 +54,12 @@ export const getProjectsController = async (req, res) => {
 
     const projects = await getProjectsByUserId(userId);
 
-    console.log(`✅ Found ${projects.length} projects`);
+    await logActivity(
+      userId,
+      null,
+      "GET_PROJECTS",
+      `Fetched ${projects.length} projects`
+    );
 
     res.json({
       success: true,
@@ -72,14 +78,17 @@ export const getProjectsController = async (req, res) => {
 export const getProjectController = async (req, res) => {
   const { id } = req.params;
 
-  console.log(`📥 [GET PROJECT] ID: ${id}`);
-
   try {
     const userId = req.user?.id;
 
     const project = await ensureProjectAccess(id, userId);
 
-    console.log("✅ Project fetched:", project);
+    await logActivity(
+      userId,
+      project.id,
+      "GET_PROJECT",
+      `Fetched project: ${project.name}`
+    );
 
     res.json({
       success: true,
@@ -98,19 +107,23 @@ export const updateProjectController = async (req, res) => {
   const { id } = req.params;
   const { name, description } = req.body;
 
-  console.log(`📥 [UPDATE PROJECT] ID: ${id}`, req.body);
-
   try {
     validateInput(["name", "description"], req.body);
 
     const userId = req.user?.id;
 
-    await ensureProjectAccess(id, userId);
+    const project = await ensureProjectAccess(id, userId);
 
     const updatedProject = await updateProject(id, name, description);
 
-    console.log("✅ Project updated:", updatedProject);
+    await logActivity(
+      userId,
+      project.id,
+      "UPDATE_PROJECT",
+      `Updated project: ${updatedProject.name}`
+    );
 
+    io.emit("projectUpdated", { projectId: updatedProject.id }) // Emit real-time event 
     res.json({
       success: true,
       message: "Project updated successfully",
@@ -127,16 +140,20 @@ export const updateProjectController = async (req, res) => {
 export const deleteProjectController = async (req, res) => {
   const { id } = req.params;
 
-  console.log(`📥 [DELETE PROJECT] ID: ${id}`);
-
   try {
     const userId = req.user?.id;
 
-    await ensureProjectOwnerAccess(id, userId);
-    
-    await deleteProject(id);
+    const project = await ensureProjectOwnerAccess(id, userId);
 
-    console.log("🗑️ Project deleted:", id);
+    await logActivity(
+      userId,
+      project.id,
+      "DELETE_PROJECT",
+      `Deleted project: ${project.name}`
+    );
+
+    await deleteProject(id);
+    io.emit("projectDeleted", { projectId: id }) // Emit real-time event
 
     res.json({
       success: true,

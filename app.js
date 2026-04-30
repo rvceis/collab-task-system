@@ -36,7 +36,7 @@ app.get('/', (req, res) => {
 // JSON parse error handler (must be before routes and after body parser)
 app.use((err, req, res, next) => {
   if (err && err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-    console.warn('⚠️ Malformed JSON received');
+    console.warn('Malformed JSON received');
     return res.status(400).json({
       success: false,
       message: 'Malformed JSON in request body',
@@ -69,7 +69,6 @@ app.use((req, res) => {
 
 // Global Error Handler Middleware
 app.use((err, req, res, next) => {
-  console.error("\n🔴 GLOBAL ERROR HANDLER");
   handleError(err, res, "GLOBAL");
 });
 

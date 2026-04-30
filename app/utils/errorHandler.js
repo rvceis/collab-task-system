@@ -15,7 +15,7 @@ export class AppError extends Error {
  * Error Handler Function - Call this in catch blocks
  */
 export const handleError = (error, res, context = "") => {
-  console.error(`\n❌ [ERROR] ${context}`, {
+  console.error(`[ERROR] ${context}`, {
     message: error.message,
     statusCode: error.statusCode || 500,
     details: error.details,

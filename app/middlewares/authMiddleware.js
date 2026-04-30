@@ -5,7 +5,6 @@ const authMiddleware = (req, res, next) => {
   const authHeader = req.header("Authorization");
   
   if (!authHeader) {
-    console.warn("🚫 No Authorization header provided");
     return res.status(401).json({
       success: false,
       message: "No token, authorization denied",
@@ -20,7 +19,6 @@ const authMiddleware = (req, res, next) => {
     : authHeader;
 
   if (!token || token.trim() === "") {
-    console.warn("🚫 Empty token");
     return res.status(401).json({
       success: false,
       message: "No token, authorization denied",
@@ -31,7 +29,7 @@ const authMiddleware = (req, res, next) => {
 
   try {
     if (!process.env.JWT_SECRET) {
-      console.error("❌ JWT_SECRET not configured");
+      console.error("JWT_SECRET not configured");
       return res.status(500).json({
         success: false,
         message: "Server configuration error",
@@ -40,18 +38,14 @@ const authMiddleware = (req, res, next) => {
       });
     }
 
-    console.log("🔍 Verifying token...");
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    console.log("✅ Decoded JWT:", decoded);
-
-    // ✅ store full object (IMPORTANT)
+    // Store full JWT payload on request
     req.user = decoded;
 
     next();
   } catch (error) {
-    console.error("❌ JWT Verification Error:", error.message);
-    console.error("Token received:", token.substring(0, 50) + "...");
+    console.error("JWT verification error:", error.message);
     
     let statusCode = 401;
     let message = "Token is not valid";

@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import pool from "../../config/db.js";
 import { findUserByEmail, createUser } from "../services/userServices.js";
 import { handleError, AppError, validateInput } from "../utils/errorHandler.js";
+import { logActivity } from "../services/activityService.js";
 
 
 export const register = async (req, res) => {
@@ -36,6 +37,13 @@ export const register = async (req, res) => {
     const token = jwt.sign({ id: newUser.id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
+
+    await logActivity(
+      newUser.id,
+      null,
+      "REGISTER",
+      `User registered: ${newUser.email}`
+    );
 
     res.status(201).json({
       success: true,
@@ -74,6 +82,13 @@ export const login = async (req, res) => {
       expiresIn: "1h",
     });
 
+    await logActivity(
+      user.id,
+      null,
+      "LOGIN",
+      `User logged in: ${user.email}`
+    );
+
     res.json({
       success: true,
       message: "Login successful",
@@ -92,8 +107,6 @@ export const getMe = async (req, res) => {
       throw new AppError("Unauthorized", 401);
     }
 
-    console.log("📥 [GET ME] User ID:", userId);
-
     // Find user by ID (more efficient than by email)
     const result = await pool.query(
       "SELECT id, name, email FROM users WHERE id = $1",
@@ -104,6 +117,13 @@ export const getMe = async (req, res) => {
     if (!user) {
       throw new AppError("User not found", 404);
     }
+
+    await logActivity(
+      user.id,
+      null,
+      "GET_ME",
+      "Fetched profile"
+    );
 
     res.json({
       success: true,

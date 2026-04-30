@@ -4,19 +4,25 @@ import { createTask,
     updateTask,deleteTask } from "../services/taskServices.js";
 import { handleError, AppError, validateInput } from "../utils/errorHandler.js";
 import { ensureProjectAccess } from "../utils/projectAccess.js";
+import { logActivity } from "../services/activityService.js";
 
 /* =========================
    CREATE TASK
 ========================= */
 export const createTaskController = async (req, res) => {
   const { title, description, projectId, assignedTo } = req.body;
-
-  console.log("📥 [CREATE TASK]", req.body)     
   try {
     validateInput(["title", "description", "projectId"], req.body)      
     await ensureProjectAccess(projectId, req.user?.id);
     const task = await createTask(title, description, projectId, assignedTo)
-    console.log("✅ Task created:", task)
+    await logActivity(
+      req.user?.id,
+      task.project_id,
+      "CREATE_TASK",
+      `Created task: ${title}`
+    );
+    io.emit("taskCreated", { taskId: task.id, projectId: task.project_id }) // Emit real-time event
+    io.emit("task_created", { taskId: task.id, projectId: task.project_id })
     res.status(201).json({
       success: true,
       message: "Task created successfully",
@@ -32,15 +38,18 @@ export const createTaskController = async (req, res) => {
 ========================= */
 export const getTasksByProjectController = async (req, res) => {
   const { projectId } = req.params;
-
-  console.log("📥 [GET TASKS BY PROJECT]", { projectId }  )
     try {           
     if (!projectId) {
       throw new AppError("projectId is required", 400);
     }
     await ensureProjectAccess(projectId, req.user?.id);
     const tasks = await getTasksByProjectId(projectId)
-    console.log(`✅ Found ${tasks.length} tasks for project ${projectId}`)
+    await logActivity(
+      req.user?.id,
+      Number(projectId),
+      "GET_TASKS_BY_PROJECT",
+      `Fetched ${tasks.length} tasks`
+    );
     res.json({
       success: true,
       message: `Retrieved ${tasks.length} tasks for project ${projectId}`,
@@ -57,15 +66,18 @@ export const getTasksByProjectController = async (req, res) => {
 ========================= */
 export const getTaskByIdController = async (req, res) => {
   const { id: taskId } = req.params;
-
-  console.log("📥 [GET TASK BY ID]", { taskId }     )
     try {           
     const task = await getTaskById(taskId)  
     if (!task) {
       throw new AppError("Task not found", 404);
     }
     await ensureProjectAccess(task.project_id, req.user?.id);
-    console.log("✅ Task fetched:", task)
+    await logActivity(
+      req.user?.id,
+      task.project_id,
+      "GET_TASK",
+      `Fetched task: ${task.title}`
+    );
     res.json({
       success: true,
       message: "Task retrieved successfully",
@@ -82,8 +94,6 @@ export const getTaskByIdController = async (req, res) => {
 export const updateTaskController = async (req, res) => {
   const { id: taskId } = req.params;
   const { title, description, assignedTo } = req.body;
-
-  console.log("📥 [UPDATE TASK]", { taskId, ...req.body }   )
     try {           
     if (!taskId) {
       throw new AppError("Task id is required", 400);
@@ -94,7 +104,14 @@ export const updateTaskController = async (req, res) => {
     }
     await ensureProjectAccess(task.project_id, req.user?.id);
     const updatedTask = await updateTask(taskId, title, description, assignedTo)  
-    console.log("✅ Task updated:", updatedTask)
+    await logActivity(
+      req.user?.id,
+      updatedTask.project_id,
+      "UPDATE_TASK",
+      `Updated task: ${updatedTask.title}`
+    );
+    io.emit("taskUpdated", { taskId: updatedTask.id, projectId: updatedTask.project_id }) // Emit real-time event
+    io.emit("task_updated", { taskId: updatedTask.id, projectId: updatedTask.project_id })
     res.json({
       success: true,
       message: "Task updated successfully",
@@ -110,8 +127,6 @@ export const updateTaskController = async (req, res) => {
 ========================= */
 export const deleteTaskController = async (req, res) => {
   const { id: taskId } = req.params;
-
-  console.log("📥 [DELETE TASK]", { taskId }            )
     try {           
     if (!taskId) {
       throw new AppError("Task id is required", 400);
@@ -122,7 +137,14 @@ export const deleteTaskController = async (req, res) => {
     }
     await ensureProjectAccess(task.project_id, req.user?.id);
     await deleteTask(taskId)  
-    console.log("✅ Task deleted:", taskId)
+    await logActivity(
+      req.user?.id,
+      task.project_id,
+      "DELETE_TASK",
+      `Deleted task: ${task.title}`
+    );
+    io.emit("taskDeleted", { taskId, projectId: task.project_id }) // Emit real-time event
+    io.emit("task_deleted", { taskId, projectId: task.project_id })
     res.json({
       success: true,
       message: "Task deleted successfully",
